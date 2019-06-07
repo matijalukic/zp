@@ -1,14 +1,16 @@
 package implementation;
 
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
 import java.io.*;
-import java.security.KeyPair;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
+import java.security.*;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Enumeration;
+import java.util.List;
 
 /**
  * Handles the saving loading and deleting storage of keys
@@ -83,6 +85,7 @@ public class KeyStorage {
         } catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException e) {
             e.printStackTrace();
         }
+
         return null;
     }
 
@@ -107,12 +110,30 @@ public class KeyStorage {
 
     private void removeAliases() throws KeyStoreException {
         Enumeration<String> aliases = keyStore.aliases();
+        List<String> aliasesList = new ArrayList<>();
 
+        // push to String list
         while(aliases.hasMoreElements()){
-            String alias = aliases.nextElement();
+            aliasesList.add(aliases.nextElement());
+        }
+        for(String alias: aliasesList) {
             keyStore.deleteEntry(alias);
         }
+    }
 
+    public boolean remove(String keyPairAlias) {
+        try{
+            // delete key
+            keyStore.deleteEntry(keyPairAlias);
+
+            // save file
+            save();
+            return true;
+        }
+        catch (KeyStoreException e){
+            e.printStackTrace();
+            return false;
+        }
     }
 
     public void reset(){
@@ -122,6 +143,38 @@ public class KeyStorage {
             deleteFile();
         } catch (KeyStoreException e) {
             e.printStackTrace();
+        }
+    }
+
+    public boolean importKeyPair(String keyPairName, String fileName, String password){
+
+        try(FileInputStream importingKeyPairStream = new FileInputStream(fileName)) {
+            KeyStore importingKeyStore = KeyStore.getInstance(instanceName, new BouncyCastleProvider());
+            // imports int keystore
+            importingKeyStore.load(importingKeyPairStream, password.toCharArray());
+
+            // chaining keypairss
+            List<String> chainAliases = Collections.list(importingKeyStore.aliases());
+            chainAliases.forEach(
+                    importingAlias -> {
+                        try{
+                            Key key = importingKeyStore.getKey(importingAlias, password.toCharArray());
+                            Certificate[] chain = importingKeyStore.getCertificateChain(importingAlias);
+
+                            // put in local KeyStore
+                            keyStore.setKeyEntry(keyPairName, key, null, chain);
+                        } catch (UnrecoverableKeyException|NoSuchAlgorithmException|KeyStoreException e) {
+                            e.printStackTrace();
+                        }
+                    }
+            );
+            // save to file
+            save();
+
+            return true;
+        } catch (KeyStoreException|CertificateException|NoSuchAlgorithmException|IOException e) {
+            e.printStackTrace();
+            return false;
         }
     }
 }

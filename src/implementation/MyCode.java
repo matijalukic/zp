@@ -185,9 +185,8 @@ public class MyCode extends CodeV3 {
     }
 
     @Override
-    public boolean importKeypair(String arg0, String arg1, String arg2) {
-        // TODO Auto-generated method stub
-        return false;
+    public boolean importKeypair(String keyPairName, String file, String password) {
+        return keyStorage.importKeyPair(keyPairName, file, password);
     }
 
     private String getCurveName(@NotNull X509Certificate keyPair){
@@ -216,16 +215,25 @@ public class MyCode extends CodeV3 {
         return splitedBySpace[0];
     }
 
-    private void showAlgorithm(X509Certificate certificate){
-        // always EC
-        access.setPublicKeyAlgorithm("EC");
-        access.setPublicKeyDigestAlgorithm(certificate.getSigAlgName());
-        // algorithm info
-        access.setPublicKeyECCurve(getCurveName(certificate));
+    private void showAlgorithm(X509Certificate certificate) {
 
-        // TODO get public parameter SET
-        access.setPublicKeyParameter(parseSetName(((ECPublicKey)certificate.getPublicKey()).getParams().toString()));
+        try {
+            // always EC
+            access.setPublicKeyAlgorithm("EC");
+            access.setPublicKeyDigestAlgorithm(certificate.getSigAlgName());
+            // algorithm info
+            access.setPublicKeyECCurve(getCurveName(certificate));
+
+            // TODO get public parameter SET
+            access.setPublicKeyParameter(parseSetName(((ECPublicKey) certificate.getPublicKey()).getParams().toString()));
+
+
+        } catch (ClassCastException e) {
+            e.printStackTrace();
+        }
+
     }
+
 
     private void showSubject(X509Certificate certificate){
 
@@ -370,7 +378,7 @@ public class MyCode extends CodeV3 {
 
     @Override
     public boolean removeKeypair(String keypairName) {
-        return allKeypairs.remove(keypairName) != null;
+        return keyStorage.remove(keypairName);
     }
 
     @Override
@@ -550,8 +558,6 @@ public class MyCode extends CodeV3 {
             Certificate[] certificateChain = new Certificate[1];
             certificateChain[0] = certificate;
 
-            // put in the hashMap
-//            allKeypairs.put(keypairName, certificateKey);
 
             // save to keyStore
             keyStorage.put(keypairName, keyPair, certificateChain);
