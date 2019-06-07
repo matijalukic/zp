@@ -143,9 +143,8 @@ public class MyCode extends CodeV3 {
     }
 
     @Override
-    public boolean exportKeypair(String arg0, String arg1, String arg2) {
-        // TODO Auto-generated method stub
-        return false;
+    public boolean exportKeypair(String keypairName, String file, String password) {
+        return keyStorage.exportKeyPair(keypairName, file, password);
     }
 
     @Override
@@ -225,11 +224,13 @@ public class MyCode extends CodeV3 {
             access.setPublicKeyECCurve(getCurveName(certificate));
 
             // TODO get public parameter SET
-            access.setPublicKeyParameter(parseSetName(((ECPublicKey) certificate.getPublicKey()).getParams().toString()));
-
+            try {
+                access.setPublicKeyParameter(parseSetName(((ECPublicKey) certificate.getPublicKey()).getParams().toString()));
+            }
+            catch (ArrayIndexOutOfBoundsException e){}
 
         } catch (ClassCastException e) {
-            e.printStackTrace();
+            System.out.println(certificate.getSerialNumber() + " public key of this certificate is not EC!");
         }
 
     }
@@ -300,7 +301,8 @@ public class MyCode extends CodeV3 {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+//            e.printStackTrace();
+            System.out.println("This key has not Subject Directory Attributes Extension set and it is null");
         }
     }
 

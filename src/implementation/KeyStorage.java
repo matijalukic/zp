@@ -146,6 +146,8 @@ public class KeyStorage {
         }
     }
 
+
+    // Importing .p12 into program
     public boolean importKeyPair(String keyPairName, String fileName, String password){
 
         try(FileInputStream importingKeyPairStream = new FileInputStream(fileName)) {
@@ -173,6 +175,29 @@ public class KeyStorage {
 
             return true;
         } catch (KeyStoreException|CertificateException|NoSuchAlgorithmException|IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    // exporting
+    public boolean exportKeyPair(String keypairName, String filePath, String password){
+
+        try(FileOutputStream exportKeyPairStream = new FileOutputStream(filePath)){
+            KeyStore exportingKeyStoreInstance = KeyStore.getInstance(instanceName, new BouncyCastleProvider());
+            // load empty keystore
+            exportingKeyStoreInstance.load(null, password.toCharArray());
+
+            // chaining
+            Key localKey = keyStore.getKey(keypairName, KeyStorage.PASSWORD);
+            Certificate[] localKeyChain = keyStore.getCertificateChain(keypairName);
+            exportingKeyStoreInstance.setKeyEntry(keypairName, localKey, password.toCharArray(), localKeyChain);
+
+            // exporting
+            exportingKeyStoreInstance.store(exportKeyPairStream, password.toCharArray());
+
+            return true;
+        } catch (KeyStoreException|NoSuchAlgorithmException|UnrecoverableKeyException|IOException|CertificateException e) {
             e.printStackTrace();
             return false;
         }
