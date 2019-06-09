@@ -1,5 +1,12 @@
 package implementation;
 
+import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x500.X500NameBuilder;
+import org.bouncycastle.asn1.x500.style.BCStyle;
+
+import java.util.HashMap;
+import java.util.Map;
 import java.util.StringTokenizer;
 
 public class SubjectInfo {
@@ -45,6 +52,31 @@ public class SubjectInfo {
 
 		return parsedSubjectInfo;
 	}
+
+	public static X500Name getName(String subject) {
+		SubjectInfo subjectInfo = parse(subject);
+		X500NameBuilder ret = new X500NameBuilder();
+
+		HashMap<ASN1ObjectIdentifier, String> map = new HashMap<>();
+
+		map.put(BCStyle.CN, subjectInfo.getCommonName());
+		if(subjectInfo.getOrganization() != null) map.put(BCStyle.O, subjectInfo.getOrganization());
+		if(subjectInfo.getOrgUnit() != null) map.put(BCStyle.OU, subjectInfo.getOrgUnit());
+		if(subjectInfo.getLocality() != null) map.put(BCStyle.L, subjectInfo.getLocality());
+		if(subjectInfo.getState() != null) map.put(BCStyle.ST, subjectInfo.getState());
+		if(subjectInfo.getCountry() != null) map.put(BCStyle.C, subjectInfo.getCountry());
+
+		map.forEach((key, value) -> {
+			if (!value.isEmpty()) {
+				ret.addRDN(key, value);
+			}
+		});
+
+		return ret.build();
+	}
+
+
+
 
 	public String getCountry() {
 		return country;

@@ -125,21 +125,18 @@ public class MyCode extends CodeV3 {
     }
 
     @Override
-    public boolean canSign(String arg0) {
-        // TODO Auto-generated method stub
-        return false;
+    public boolean canSign(String keyPairName) {
+        return keyStorage.canSign(keyPairName);
     }
 
     @Override
-    public boolean exportCSR(String arg0, String arg1, String arg2) {
-        // TODO Auto-generated method stub
-        return false;
+    public boolean exportCSR(String file, String keyPairName, String algorithm) {
+        return keyStorage.exportCSR(file, keyPairName, algorithm);
     }
 
     @Override
-    public boolean exportCertificate(String arg0, String arg1, int arg2, int arg3) {
-        // TODO Auto-generated method stub
-        return false;
+    public boolean exportCertificate(String filePath, String keyPairName, int encoding, int format) {
+        return keyStorage.exportCertificate(filePath, keyPairName, encoding, format);
     }
 
     @Override
@@ -148,39 +145,49 @@ public class MyCode extends CodeV3 {
     }
 
     @Override
-    public String getCertPublicKeyAlgorithm(String arg0) {
-        // TODO Auto-generated method stub
+    public String getCertPublicKeyAlgorithm(String keyPairName) {
+        return "EC";
+    }
+
+    @Override
+    public String getCertPublicKeyParameter(String keyPairName) {
+        try {
+            X509Certificate certificate = null;
+            certificate = (X509Certificate)keyStorage.getKeyStore().getCertificate(keyPairName);
+            ECPublicKey pubKey = (ECPublicKey) certificate.getPublicKey();
+            return pubKey.getParams().toString();
+        } catch (KeyStoreException e) {
+            e.printStackTrace();
+        }
         return null;
     }
 
     @Override
-    public String getCertPublicKeyParameter(String arg0) {
-        // TODO Auto-generated method stub
+    public String getSubjectInfo(String keyPairName) {
+        try {
+            X509Certificate certificate = null;
+            certificate = (X509Certificate)keyStorage.getKeyStore().getCertificate(keyPairName);
+            return certificate.getSubjectDN().toString().replaceAll("\\s*,\\s*", ",");
+        } catch (KeyStoreException e) {
+            e.printStackTrace();
+        }
         return null;
     }
 
     @Override
-    public String getSubjectInfo(String arg0) {
+    public boolean importCAReply(String filePath, String arg1) {
         // TODO Auto-generated method stub
-        return null;
+        return keyStorage.importCAReply(filePath, arg1);
     }
 
     @Override
-    public boolean importCAReply(String arg0, String arg1) {
-        // TODO Auto-generated method stub
-        return false;
+    public String importCSR(String fileName) {
+        return keyStorage.importCSR(fileName);
     }
 
     @Override
-    public String importCSR(String arg0) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public boolean importCertificate(String arg0, String arg1) {
-        // TODO Auto-generated method stub
-        return false;
+    public boolean importCertificate(String filePath, String keyPairName) {
+        return keyStorage.importCertificate(filePath, keyPairName);
     }
 
     @Override
@@ -203,9 +210,9 @@ public class MyCode extends CodeV3 {
 
     }
 
-    private void showKeyUsage(X509Certificate certificate){
-        // key usage
-        access.setKeyUsage(certificate.getKeyUsage());
+    private void showKeyUsage(X509Certificate certificate) {
+        if (certificate.getKeyUsage() != null)
+            access.setKeyUsage(certificate.getKeyUsage());
     }
 
     private String parseSetName(String rawParamsString){
@@ -214,20 +221,15 @@ public class MyCode extends CodeV3 {
         return splitedBySpace[0];
     }
 
-    private void showAlgorithm(X509Certificate certificate) {
+    private void showAlgorithm(X509Certificate certificate, String keyPairName) {
 
         try {
             // always EC
-            access.setPublicKeyAlgorithm("EC");
-            access.setPublicKeyDigestAlgorithm(certificate.getSigAlgName());
+            access.setPublicKeyAlgorithm(getCertPublicKeyAlgorithm(keyPairName));
+//            access.setPub(certificate.getSigAlgName());
             // algorithm info
             access.setPublicKeyECCurve(getCurveName(certificate));
-
-            // TODO get public parameter SET
-            try {
-                access.setPublicKeyParameter(parseSetName(((ECPublicKey) certificate.getPublicKey()).getParams().toString()));
-            }
-            catch (ArrayIndexOutOfBoundsException e){}
+            access.setPublicKeyParameter(getCertPublicKeyParameter(keyPairName));
 
         } catch (ClassCastException e) {
             System.out.println(certificate.getSerialNumber() + " public key of this certificate is not EC!");
@@ -247,6 +249,7 @@ public class MyCode extends CodeV3 {
         access.setSubjectOrganization(parsedSubjectInfo.getOrganization());
         access.setSubjectOrganizationUnit(parsedSubjectInfo.getOrgUnit());
         access.setSubjectLocality(parsedSubjectInfo.getLocality());
+//        access.setSubject(certificate.getSubjectDN().toString().replaceAll("\\s,\\s", ","));
 
     }
 
@@ -328,10 +331,10 @@ public class MyCode extends CodeV3 {
         }
     }
 
-    private void certificateToGUI(X509Certificate certificate) {
+    private void certificateToGUI(X509Certificate certificate, String keyPairName) {
         showVersionSerial(certificate);
 
-        showAlgorithm(certificate);
+        showAlgorithm(certificate, keyPairName);
 
         showKeyUsage(certificate);
 
@@ -352,7 +355,7 @@ public class MyCode extends CodeV3 {
             if (cert == null) throw new Exception("There is no certificate founded under alias: " + keypairName);
 
             // show certificate on GUI
-            certificateToGUI(cert);
+            certificateToGUI(cert, keypairName);
             // set status unsigned
             loadStatus = LoadStatus.UNSIGNED;
 
@@ -577,9 +580,9 @@ public class MyCode extends CodeV3 {
     }
 
     @Override
-    public boolean signCSR(String arg0, String arg1, String arg2) {
+    public boolean signCSR(String file, String alias, String algorithm) {
         // TODO Auto-generated method stub
-        return false;
+        return keyStorage.signCSR(access, file, alias, algorithm);
     }
 
 
