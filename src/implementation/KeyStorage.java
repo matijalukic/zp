@@ -18,6 +18,7 @@ import org.bouncycastle.jce.X509KeyUsage;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.operator.*;
 import org.bouncycastle.operator.bc.BcECContentSignerBuilder;
+import org.bouncycastle.operator.bc.BcRSAContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
@@ -47,6 +48,8 @@ public class KeyStorage {
     private static final char[] PASSWORD = password.toCharArray();
     private static final String X509_INSTANCE = "X.509";
     private static CertificateFactory certificateFactory;
+    private static final BouncyCastleProvider BOUNCY_CASTLE_PROVIDER = new BouncyCastleProvider();
+
 
     static {
         try {
@@ -187,7 +190,7 @@ public class KeyStorage {
     public boolean importKeyPair(String keyPairName, String fileName, String importingPassword) {
 
         try (FileInputStream importingKeyPairStream = new FileInputStream(fileName)) {
-            KeyStore importingKeyStore = KeyStore.getInstance(instanceName, new BouncyCastleProvider());
+            KeyStore importingKeyStore = KeyStore.getInstance(instanceName, BOUNCY_CASTLE_PROVIDER);
             // imports int keystore
             importingKeyStore.load(importingKeyPairStream, importingPassword.toCharArray());
 
@@ -221,7 +224,7 @@ public class KeyStorage {
     public boolean exportKeyPair(String keypairName, String filePath, String exportingPassword) {
 
         try (FileOutputStream exportKeyPairStream = new FileOutputStream(filePath)) {
-            KeyStore exportingKeyStoreInstance = KeyStore.getInstance(instanceName, new BouncyCastleProvider());
+            KeyStore exportingKeyStoreInstance = KeyStore.getInstance(instanceName, BOUNCY_CASTLE_PROVIDER);
             // load empty keystore
             exportingKeyStoreInstance.load(null, exportingPassword.toCharArray());
 
@@ -315,15 +318,13 @@ public class KeyStorage {
         try {
             X509Certificate certificate = (X509Certificate) keyStore.getCertificate(keyPairName);
             // check if it is certificate authority
-            if (certificate.getBasicConstraints() == -1) {
-                return false;
-            }
+//            if (certificate.getBasicConstraints() == -1) {
+//                return false;
+//            }
             boolean[] keyUsage = certificate.getKeyUsage();
             if (keyUsage == null) {
-                System.out.println("canSign() Key usages is null");
                 return false; // key usage is not set
             }
-            System.out.println("canSign() key usages key cert sign " + keyUsage[Constants.KEY_CERT_SIGN]);
             // return Key certificate sign usage
             return keyUsage[Constants.KEY_CERT_SIGN];
         } catch (KeyStoreException e) {
@@ -343,7 +344,9 @@ public class KeyStorage {
             AlgorithmIdentifier signature = new DefaultSignatureAlgorithmIdentifierFinder().find(algorithm);
             AlgorithmIdentifier digest = new DefaultDigestAlgorithmIdentifierFinder().find(signature);
             AsymmetricKeyParameter parameter = PrivateKeyFactory.createKey(keyStore.getKey(keyPairName, null).getEncoded());
-            PKCS10CertificationRequest request = builder.build(new BcECContentSignerBuilder(signature, digest).build(parameter));
+            ContentSigner contentSigner = new BcRSAContentSignerBuilder(signature, digest).build(parameter);
+
+            PKCS10CertificationRequest request = builder.build(contentSigner);
 
             fos.write(request.getEncoded());
             return true;
@@ -379,15 +382,15 @@ public class KeyStorage {
             Date notAfter = access.getNotAfter();
 
             X500Name subject = request.getSubject();
-            PublicKey pubKey = new JcaPKCS10CertificationRequest(request).setProvider(new BouncyCastleProvider()).getPublicKey();
+            PublicKey pubKey = new JcaPKCS10CertificationRequest(request).setProvider(BOUNCY_CASTLE_PROVIDER).getPublicKey();
 
             JcaX509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(name, serial, notBefore, notAfter, subject, pubKey);
             setKeyUsage(builder, access.getKeyUsage(), access.isCritical(Constants.KU));
             // TODO subject directory attributes
             // TODO extented key usages
 
-            PrivateKey privateKey = (PrivateKey) keyStore.getKey(keyPairName, null);
-            ContentSigner signer = new JcaContentSignerBuilder(algorithm).setProvider(new BouncyCastleProvider()).build(privateKey);
+            PrivateKey privateKey = (PrivateKey) keyStore.getKey(keyPairName, PASSWORD); // TODO test password
+            ContentSigner signer = new JcaContentSignerBuilder(algorithm).setProvider(BOUNCY_CASTLE_PROVIDER).build(privateKey);
 
             X509Certificate signed = new JcaX509CertificateConverter().getCertificate(builder.build(signer));
 
@@ -432,11 +435,11 @@ public class KeyStorage {
             PKCS10CertificationRequest request = new PKCS10CertificationRequest(fileContent);
             certificationRequest = request;
 
-            ContentVerifierProvider contentVerifierProvider = new JcaContentVerifierProviderBuilder().setProvider(new BouncyCastleProvider()).build(request.getSubjectPublicKeyInfo());
-            if (request.isSignatureValid(contentVerifierProvider))
+            ContentVerifierProvider contentVerifierProvider = new JcaContentVerifierProviderBuilder().setProvider(BOUNCY_CASTLE_PROVIDER).build(request.getSubjectPublicKeyInfo());
+//            if (request.isSignatureValid(contentVerifierProvider))
                 return request.getSubject().toString().replaceAll("\\s,\\s", ",");
 
-        } catch (PKCSException | OperatorCreationException | IOException e) {
+        } catch (OperatorCreationException | IOException e) {
             e.printStackTrace();
         }
 
@@ -446,7 +449,7 @@ public class KeyStorage {
 
 
     private boolean validCAReply(String fileName, String keyPairName){
-        JcaX509CertificateConverter converter = new JcaX509CertificateConverter().setProvider(new BouncyCastleProvider());
+        JcaX509CertificateConverter converter = new JcaX509CertificateConverter().setProvider(BOUNCY_CASTLE_PROVIDER);
         try(
             FileInputStream fis = new FileInputStream(fileName);
             DataInputStream dis = new DataInputStream(fis)
@@ -514,6 +517,37 @@ public class KeyStorage {
         }
 
         return false;
+    }
+
+
+    private boolean verifyCertificate(X509Certificate certificate) throws NoSuchProviderException, CertificateException, NoSuchAlgorithmException, InvalidKeyException, SignatureException {
+        certificate.verify(certificate.getPublicKey());
+        return certificate.getBasicConstraints() != -1;
+    }
+
+    public boolean isChainSigned(X509Certificate certificate, String keyPairName){
+        try {
+            Certificate[] certificateChain = keyStore.getCertificateChain(keyPairName);
+
+            // only one in chain verify only one
+            if(1==certificateChain.length){
+                return verifyCertificate(certificate);
+            }
+            else{
+                for(int i = 0;  i < certificateChain.length; i++){
+                    // if one certificate is not signed return false
+                    if(!verifyCertificate((X509Certificate) certificateChain[i]))
+                        return false;
+                }
+                // all are verified
+                return true;
+            }
+
+        } catch (KeyStoreException | CertificateException | NoSuchAlgorithmException | InvalidKeyException | NoSuchProviderException | SignatureException e) {
+            e.printStackTrace();
+        }
+        return false;
+
     }
 }
 

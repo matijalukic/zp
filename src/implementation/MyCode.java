@@ -154,8 +154,8 @@ public class MyCode extends CodeV3 {
         try {
             X509Certificate certificate = null;
             certificate = (X509Certificate)keyStorage.getKeyStore().getCertificate(keyPairName);
-            ECPublicKey pubKey = (ECPublicKey) certificate.getPublicKey();
-            return pubKey.getParams().toString();
+            RSAPublicKey pubKey = (RSAPublicKey) certificate.getPublicKey();
+            return pubKey.toString();
         } catch (KeyStoreException e) {
             e.printStackTrace();
         }
@@ -175,9 +175,8 @@ public class MyCode extends CodeV3 {
     }
 
     @Override
-    public boolean importCAReply(String filePath, String arg1) {
-        // TODO Auto-generated method stub
-        return keyStorage.importCAReply(filePath, arg1);
+    public boolean importCAReply(String filePath, String keyPairName) {
+        return keyStorage.importCAReply(filePath, keyPairName);
     }
 
     @Override
@@ -346,6 +345,25 @@ public class MyCode extends CodeV3 {
 
         showExtendedKeyUsage(certificate);
     }
+
+    private LoadStatus getLoadStatus(X509Certificate certificate, String keyPairName){
+        try{
+            // if it is in the KeyStore
+            if(keyStorage.getKeyStore().isCertificateEntry(keyPairName)){
+                return LoadStatus.TRUSTED;
+            }
+            // chain is signed
+            if(keyStorage.isChainSigned(certificate, keyPairName))
+                return LoadStatus.SIGNED;
+            // unsinged
+            return LoadStatus.UNSIGNED;
+        } catch (KeyStoreException e) {
+            e.printStackTrace();
+        }
+
+        return LoadStatus.ERROR;
+    }
+
 
     @Override
     public int loadKeypair(String keypairName) {
@@ -563,7 +581,6 @@ public class MyCode extends CodeV3 {
             Certificate[] certificateChain = new Certificate[1];
             certificateChain[0] = certificate;
 
-
             // save to keyStore
             keyStorage.put(keypairName, keyPair, certificateChain);
             // save to file output
@@ -581,7 +598,6 @@ public class MyCode extends CodeV3 {
 
     @Override
     public boolean signCSR(String file, String alias, String algorithm) {
-        // TODO Auto-generated method stub
         return keyStorage.signCSR(access, file, alias, algorithm);
     }
 
