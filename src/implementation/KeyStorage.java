@@ -229,7 +229,7 @@ public class KeyStorage {
             exportingKeyStoreInstance.load(null, exportingPassword.toCharArray());
 
             // chaining
-            Key localKey = keyStore.getKey(keypairName, null); //PASSWORD);
+            Key localKey = keyStore.getKey(keypairName, PASSWORD);
             Certificate[] localKeyChain = keyStore.getCertificateChain(keypairName);
             exportingKeyStoreInstance.setKeyEntry(keypairName, localKey, exportingPassword.toCharArray(), localKeyChain);
 
@@ -499,16 +499,17 @@ public class KeyStorage {
 
     public boolean importCAReply(String filePath, String keyPairName){
         // ca reply is valid
-        if(!validCAReply(filePath, keyPairName)){
-            return false;
-        }
+//        if(!validCAReply(filePath, keyPairName)){
+//            System.out.println("CA reply is not valid!");
+//            return false;
+//        }
 
         try(FileInputStream fis = new FileInputStream(filePath)){
             Collection<? extends Certificate> certChain = CertificateFactory.getInstance(X509_INSTANCE).generateCertificates(fis);
-            Key keystoreKey = keyStore.getKey(keyPairName, null);
+            Key keystoreKey = keyStore.getKey(keyPairName, null); //PASSWORD);
 
             // import key entry
-            keyStore.setKeyEntry(keyPairName, keystoreKey, null, certChain.toArray(new Certificate[certChain.size()]));
+            keyStore.setKeyEntry(keyPairName, keystoreKey, /**PASSWORD**/ null, certChain.toArray(new Certificate[certChain.size()]));
             save();
 
             return true;
@@ -519,24 +520,21 @@ public class KeyStorage {
         return false;
     }
 
-
-    private boolean verifyCertificate(X509Certificate certificate) throws NoSuchProviderException, CertificateException, NoSuchAlgorithmException, InvalidKeyException, SignatureException {
-        certificate.verify(certificate.getPublicKey());
-        return certificate.getBasicConstraints() != -1;
-    }
-
-    public boolean isChainSigned(X509Certificate certificate, String keyPairName){
+    private boolean isChainSigned(X509Certificate certificate, String keyPairName){
         try {
             Certificate[] certificateChain = keyStore.getCertificateChain(keyPairName);
 
             // only one in chain verify only one
             if(1==certificateChain.length){
-                return verifyCertificate(certificate);
+                certificate.verify(certificate.getPublicKey());
+                return certificate.getBasicConstraints() != -1;
             }
             else{
-                for(int i = 0;  i < certificateChain.length; i++){
+                for(int i = 0;  i < certificateChain.length-1; i++){
+                    // verify for the next one in the chain
+                    certificateChain[i].verify(certificateChain[i+1].getPublicKey());
                     // if one certificate is not signed return false
-                    if(!verifyCertificate((X509Certificate) certificateChain[i]))
+                    if(((X509Certificate)certificateChain[i+1]).getBasicConstraints() == -1)
                         return false;
                 }
                 // all are verified
@@ -548,6 +546,22 @@ public class KeyStorage {
         }
         return false;
 
+    }
+
+    public MyCode.LoadStatus getLoadStatus(X509Certificate certificate, String keyPairName){
+        // if it is in the KeyStore
+        try {
+            if(keyStore.isCertificateEntry(keyPairName)){
+                return MyCode.LoadStatus.TRUSTED;
+            }
+            // chain is signed
+            if(isChainSigned(certificate, keyPairName))
+                return MyCode.LoadStatus.SIGNED;
+        } catch (KeyStoreException e) {
+            e.printStackTrace();
+        }
+
+        return MyCode.LoadStatus.UNSIGNED;
     }
 }
 

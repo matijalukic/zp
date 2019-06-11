@@ -346,36 +346,20 @@ public class MyCode extends CodeV3 {
         showExtendedKeyUsage(certificate);
     }
 
-    private LoadStatus getLoadStatus(X509Certificate certificate, String keyPairName){
-        try{
-            // if it is in the KeyStore
-            if(keyStorage.getKeyStore().isCertificateEntry(keyPairName)){
-                return LoadStatus.TRUSTED;
-            }
-            // chain is signed
-            if(keyStorage.isChainSigned(certificate, keyPairName))
-                return LoadStatus.SIGNED;
-            // unsinged
-            return LoadStatus.UNSIGNED;
-        } catch (KeyStoreException e) {
-            e.printStackTrace();
-        }
-
-        return LoadStatus.ERROR;
-    }
 
 
     @Override
     public int loadKeypair(String keypairName) {
         LoadStatus loadStatus;
         try {
-            X509Certificate cert = keyStorage.getCertificate(keypairName);
+            X509Certificate cert = keyStorage.getCertificate(keypairName.toLowerCase());
             if (cert == null) throw new Exception("There is no certificate founded under alias: " + keypairName);
 
             // show certificate on GUI
             certificateToGUI(cert, keypairName);
             // set status unsigned
-            loadStatus = LoadStatus.UNSIGNED;
+            loadStatus = keyStorage.getLoadStatus(cert, keypairName);
+            System.out.println("Selected key pair has " + loadStatus.toString() + "` status!");
 
         } catch (Exception e) {
             e.printStackTrace();
